@@ -21,6 +21,14 @@ pub struct CrateSpec {
     version_req: Option<String>,
 }
 
+/// Tries to guess if `cargo add <name>` was probably meant to be 
+/// `cargo add --path <name>`. Looks to see if a Cargo.toml exists under `<name>`.
+fn probably_path_dependency(name: &str) -> bool {
+    let mut possibly_toml_path = std::path::PathBuf::from(name);
+    possibly_toml_path.push("Cargo.toml");
+    possibly_toml_path.exists()
+}
+
 impl CrateSpec {
     /// Convert a string to a `Crate`
     pub fn resolve(pkg_id: &str) -> CargoResult<Self> {
@@ -29,7 +37,13 @@ impl CrateSpec {
             .map(|(n, v)| (n, Some(v)))
             .unwrap_or((pkg_id, None));
 
-        validate_package_name(name, "dependency name", "")?;
+        let hint = if probably_path_dependency(name) {
+            format!("\nhint: to add a path dependency, use `cargo add --path {name}`")
+        } else {
+            String::new()
+        };
+
+        validate_package_name(name, "dependency name", &hint)?;
 
         if let Some(version) = version {
             semver::VersionReq::parse(version)
